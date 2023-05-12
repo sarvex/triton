@@ -17,7 +17,13 @@ DEVICE_NAME = 'v100'
 
 def nvsmi(attrs):
     attrs = ','.join(attrs)
-    cmd = ['nvidia-smi', '-i', '0', '--query-gpu=' + attrs, '--format=csv,noheader,nounits']
+    cmd = [
+        'nvidia-smi',
+        '-i',
+        '0',
+        f'--query-gpu={attrs}',
+        '--format=csv,noheader,nounits',
+    ]
     out = subprocess.check_output(cmd)
     ret = out.decode(sys.stdout.encoding).split(',')
     ret = [int(x) for x in ret]

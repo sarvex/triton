@@ -20,9 +20,20 @@ def get_configs_io_bound():
                         triton.Config({'BLOCK_M': block_m, 'BLOCK_N': block_n, 'BLOCK_K': block_k, 'SPLIT_K': 1},
                                       num_stages=num_stages, num_warps=num_warps))
                     # split_k
-                    for split_k in [2, 4, 8, 16]:
-                        configs.append(triton.Config({'BLOCK_M': block_m, 'BLOCK_N': block_n, 'BLOCK_K': block_k, 'SPLIT_K': split_k},
-                                                     num_stages=num_stages, num_warps=num_warps, pre_hook=init_to_zero('C')))
+                    configs.extend(
+                        triton.Config(
+                            {
+                                'BLOCK_M': block_m,
+                                'BLOCK_N': block_n,
+                                'BLOCK_K': block_k,
+                                'SPLIT_K': split_k,
+                            },
+                            num_stages=num_stages,
+                            num_warps=num_warps,
+                            pre_hook=init_to_zero('C'),
+                        )
+                        for split_k in [2, 4, 8, 16]
+                    )
     return configs
 
 

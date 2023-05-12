@@ -48,14 +48,12 @@ def processSassLines(fline, sline, labels):
     asm = FLINE_RE.match(fline).group(1)
     # Remove tailing space
     if asm.endswith(" ;"):
-        asm = asm[:-2] + ";"
+        asm = f"{asm[:-2]};"
     ctrl = parseCtrl(sline)
     # BRA target address
     if BRA_RE.match(asm) is not None:
         target = int(BRA_RE.match(asm).group(2), 16)
-        if target in labels:
-            pass
-        else:
+        if target not in labels:
             labels[target] = len(labels)
     return (f'{ctrl}', f'{asm}')
 

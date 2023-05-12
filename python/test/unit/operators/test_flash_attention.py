@@ -18,8 +18,8 @@ def test_op(Z, H, N_CTX, D_HEAD, dtype=torch.float16):
     # reference implementation
     M = torch.tril(torch.ones((N_CTX, N_CTX), device="cuda"))
     p = torch.matmul(q, k.transpose(2, 3)) * sm_scale
-    for z in range(Z):
-        for h in range(H):
+    for _ in range(Z):
+        for _ in range(H):
             p[:, :, M == 0] = float("-inf")
     p = torch.softmax(p.float(), dim=-1).half()
     # p = torch.exp(p)

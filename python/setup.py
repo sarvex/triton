@@ -104,11 +104,11 @@ def get_thirdparty_packages(triton_cache_path):
 def download_and_copy_ptxas():
     base_dir = os.path.dirname(__file__)
     src_path = "bin/ptxas"
-    url = "https://conda.anaconda.org/nvidia/label/cuda-12.0.0/linux-64/cuda-nvcc-12.0.76-0.tar.bz2"
     dst_prefix = os.path.join(base_dir, "triton")
     dst_suffix = os.path.join("third_party", "cuda", src_path)
     dst_path = os.path.join(dst_prefix, dst_suffix)
     if not os.path.exists(dst_path):
+        url = "https://conda.anaconda.org/nvidia/label/cuda-12.0.0/linux-64/cuda-nvcc-12.0.76-0.tar.bz2"
         print(f'downloading and extracting {url} ...')
         ftpstream = urllib.request.urlopen(url)
         file = tarfile.open(fileobj=ftpstream, mode="r|*")
@@ -150,7 +150,7 @@ class CMakeBuild(build_ext):
             )
 
         if platform.system() == "Windows":
-            cmake_version = LooseVersion(re.search(r"version\s*([\d.]+)", out.decode()).group(1))
+            cmake_version = LooseVersion(re.search(r"version\s*([\d.]+)", out.decode())[1])
             if cmake_version < "3.1.0":
                 raise RuntimeError("CMake >= 3.1.0 is required on Windows")
 
@@ -170,15 +170,15 @@ class CMakeBuild(build_ext):
         python_include_dir = distutils.sysconfig.get_python_inc()
         cmake_args = [
             "-DLLVM_ENABLE_WERROR=ON",
-            "-DCMAKE_LIBRARY_OUTPUT_DIRECTORY=" + extdir,
+            f"-DCMAKE_LIBRARY_OUTPUT_DIRECTORY={extdir}",
             "-DTRITON_BUILD_TUTORIALS=OFF",
             "-DTRITON_BUILD_PYTHON_MODULE=ON",
-            "-DPython3_EXECUTABLE:FILEPATH=" + sys.executable,
+            f"-DPython3_EXECUTABLE:FILEPATH={sys.executable}",
             "-DCMAKE_VERBOSE_MAKEFILE:BOOL=ON",
-            "-DPYTHON_INCLUDE_DIRS=" + python_include_dir,
+            f"-DPYTHON_INCLUDE_DIRS={python_include_dir}",
         ]
         if lit_dir is not None:
-            cmake_args.append("-DLLVM_EXTERNAL_LIT=" + lit_dir)
+            cmake_args.append(f"-DLLVM_EXTERNAL_LIT={lit_dir}")
         cmake_args.extend(thirdparty_cmake_args)
 
         # configuration
@@ -192,8 +192,8 @@ class CMakeBuild(build_ext):
             build_args += ["--", "/m"]
         else:
             import multiprocessing
-            cmake_args += ["-DCMAKE_BUILD_TYPE=" + cfg]
-            build_args += ['-j' + str(2 * multiprocessing.cpu_count())]
+            cmake_args += [f"-DCMAKE_BUILD_TYPE={cfg}"]
+            build_args += [f'-j{str(2 * multiprocessing.cpu_count())}']
 
         env = os.environ.copy()
         subprocess.check_call(["cmake", self.base_dir] + cmake_args, cwd=self.build_temp, env=env)

@@ -11,9 +11,7 @@ def num_warps(n):
         return 2
     if n <= 512:
         return 4
-    if n <= 4096:
-        return 8
-    return 16
+    return 8 if n <= 4096 else 16
 
 
 @triton.jit

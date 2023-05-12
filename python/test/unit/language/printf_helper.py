@@ -20,12 +20,13 @@ torch_type = {
 
 def get_tensor(shape, data_type, b_positive=False):
     x = None
-    if data_type.startswith('int'):
-        x = torch.arange(0, shape[0], dtype=torch_type[data_type], device='cuda')
-    else:
-        x = torch.arange(0, shape[0], dtype=torch_type[data_type], device='cuda')
-
-    return x
+    return (
+        torch.arange(0, shape[0], dtype=torch_type[data_type], device='cuda')
+        if data_type.startswith('int')
+        else torch.arange(
+            0, shape[0], dtype=torch_type[data_type], device='cuda'
+        )
+    )
 
 # @pytest.mark.parametrize('data_type',
 #                          [("int8"),

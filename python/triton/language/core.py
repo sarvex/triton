@@ -152,9 +152,7 @@ class dtype:
         return False
 
     def __eq__(self, other: dtype):
-        if not isinstance(other, dtype):
-            return False
-        return self.name == other.name
+        return False if not isinstance(other, dtype) else self.name == other.name
 
     def __ne__(self, other: dtype):
         return not self.__eq__(other)
@@ -329,10 +327,7 @@ class constexpr:
     """
 
     def __init__(self, value):
-        if isinstance(value, constexpr):
-            self.value = value.value
-        else:
-            self.value = value
+        self.value = value.value if isinstance(value, constexpr) else value
 
     def __repr__(self) -> str:
         return f"constexpr[{self.value}]"
@@ -459,7 +454,7 @@ class tensor:
 
     def __str__(self) -> str:
         # ex. "float32[3,4]"
-        return str(self.dtype) + '[' + ','.join(str(s) for s in self.shape) + ']'
+        return f'{str(self.dtype)}[' + ','.join(str(s) for s in self.shape) + ']'
 
     @builtin
     def __add__(self, other, _builder=None):
@@ -635,9 +630,7 @@ class tensor:
         for dim, sl in enumerate(slices):
             if isinstance(sl, constexpr) and sl.value is None:
                 ret = semantic.expand_dims(ret, dim, _builder)
-            elif sl == slice(None, None, None):
-                pass
-            else:
+            elif sl != slice(None, None, None):
                 assert False, "unsupported"
         return ret
 
@@ -658,9 +651,7 @@ class tensor:
 # SPMD Programming Model
 # -----------------------
 def _constexpr_to_value(v):
-    if isinstance(v, constexpr):
-        return v.value
-    return v
+    return v.value if isinstance(v, constexpr) else v
 
 
 @builtin
@@ -1302,15 +1293,9 @@ def printf(prefix, *args, _builder=None):
     if isinstance(prefix, constexpr):
         new_prefix = prefix.value
     assert isinstance(new_prefix, str), f"{new_prefix} is not string"
-    b_ascii = True
-    for ch in new_prefix:
-        if ch not in string.printable:
-            b_ascii = False
-            break
+    b_ascii = all(ch in string.printable for ch in new_prefix)
     assert b_ascii, f"{new_prefix} is not an ascii string"
-    new_args = []
-    for arg in args:
-        new_args.append(_to_tensor(arg, _builder))
+    new_args = [_to_tensor(arg, _builder) for arg in args]
     return semantic.printf(new_prefix, new_args, _builder)
 
 # -----------------------

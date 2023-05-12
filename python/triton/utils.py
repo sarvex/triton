@@ -26,9 +26,7 @@ class MockTensor:
     """
     @staticmethod
     def wrap_dtype(arg):
-        if isinstance(arg, torch.dtype):
-            return MockTensor(arg)
-        return arg
+        return MockTensor(arg) if isinstance(arg, torch.dtype) else arg
 
     def __init__(self, dtype):
         self.dtype = dtype

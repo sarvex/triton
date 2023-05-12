@@ -180,7 +180,7 @@ def _dsd_kernel(
     inc_a = tl.multiple_of(inc_a, 8)
     inc_b = tl.load(pinc)
     inc_b = tl.multiple_of(inc_b, 8)
-    for k in range(K, 0, -TILE_K):
+    for _ in range(K, 0, -TILE_K):
         a = tl.load(pa, mask=True)
         b = tl.load(pb, mask=offs_bn[None, :] < DS0)
         acc += tl.dot(a, b)
@@ -427,11 +427,20 @@ class matmul:
             self.db_lut, self.db_width = sdd_lut(layout, block, device)
 
     def __call__(self, a, b, out=None):
-        c = _matmul.apply(
-            a, b, self.trans_a, self.trans_b, self.trans_c, self.mode, self.spdims, self.block,
-            self.c_lut, self.c_width,
-            self.da_lut, self.da_width,
-            self.db_lut, self.db_width,
-            out
+        return _matmul.apply(
+            a,
+            b,
+            self.trans_a,
+            self.trans_b,
+            self.trans_c,
+            self.mode,
+            self.spdims,
+            self.block,
+            self.c_lut,
+            self.c_width,
+            self.da_lut,
+            self.da_width,
+            self.db_lut,
+            self.db_width,
+            out,
         )
-        return c

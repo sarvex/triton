@@ -188,5 +188,4 @@ def triton_attention(
 
     w = sparse_dot_sdd_nt(query, key)
     w = sparse_softmax(w, scale=scale, is_causal=True)
-    a = sparse_dot_dsd_nn(w, value)
-    return a
+    return sparse_dot_dsd_nn(w, value)

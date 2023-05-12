@@ -13,16 +13,22 @@ def get_tensorcore_tflops(backend, device, num_ctas, num_warps, dtype):
     triton.compiler.init_cuda_utils()
 
     num_subcores = triton.compiler.cuda_utils.get_device_properties(device)["multiprocessor_count"] * 4  # on recent GPUs
-    tflops = min(num_subcores, total_warps) / num_subcores * get_max_tensorcore_tflops(dtype, backend, device)
-    return tflops
+    return (
+        min(num_subcores, total_warps)
+        / num_subcores
+        * get_max_tensorcore_tflops(dtype, backend, device)
+    )
 
 
 def get_simd_tflops(backend, device, num_ctas, num_warps, dtype):
     ''' return compute throughput in TOPS '''
     total_warps = num_ctas * min(num_warps, 4)
     num_subcores = triton.compiler.cuda_utils.get_device_properties(device)["multiprocessor_count"] * 4  # on recent GPUs
-    tflops = min(num_subcores, total_warps) / num_subcores * get_max_simd_tflops(dtype, backend, device)
-    return tflops
+    return (
+        min(num_subcores, total_warps)
+        / num_subcores
+        * get_max_simd_tflops(dtype, backend, device)
+    )
 
 
 def get_tflops(backend, device, num_ctas, num_warps, dtype):
@@ -152,8 +158,7 @@ def early_config_prune(configs, named_args):
             nearest = heapq.nsmallest(2, v, key=lambda x: 10 + abs(x[1] - optimal_num_stages)
                                       if (x[1] - optimal_num_stages) < 0 else x[1] - optimal_num_stages)
 
-            for n in nearest:
-                pruned_configs.append(n[0])
+            pruned_configs.extend(n[0] for n in nearest)
         else:  # Volta & Turing only supports num_stages <= 2
             random_config = v[0][0]
             random_config.num_stages = 2

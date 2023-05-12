@@ -15,7 +15,7 @@ def dispatch(func, lib_name: str, lib_path: str, args: list, arg_type_symbol_dic
         :param _builder: the builder
         :return: the return value of the function
     '''
-    if len(arg_type_symbol_dict) == 0:
+    if not arg_type_symbol_dict:
         raise ValueError("arg_type_symbol_dict is empty")
 
     num_args = len(list(arg_type_symbol_dict.keys())[0])
@@ -37,12 +37,11 @@ def dispatch(func, lib_name: str, lib_path: str, args: list, arg_type_symbol_dic
     if arg_types not in arg_type_symbol_dict:
         raise ValueError(f"input arg type does not match."
                          f"Expect one of {arg_type_symbol_dict.keys()}, got {arg_types}")
-    else:
-        symbol = arg_type_symbol_dict[arg_types][0]
-        ret_type = arg_type_symbol_dict[arg_types][1]
-        if ret_shape:
-            ret_type = core.block_type(ret_type, ret_shape)
-        return core.tensor(func(lib_name, lib_path, symbol, arg_list, ret_type.to_ir(_builder)), ret_type)
+    symbol = arg_type_symbol_dict[arg_types][0]
+    ret_type = arg_type_symbol_dict[arg_types][1]
+    if ret_shape:
+        ret_type = core.block_type(ret_type, ret_shape)
+    return core.tensor(func(lib_name, lib_path, symbol, arg_list, ret_type.to_ir(_builder)), ret_type)
 
 
 def elementwise(lib_name: str, lib_path: str, args: list, arg_type_symbol_dict: dict, _builder=None):
@@ -65,7 +64,7 @@ def elementwise(lib_name: str, lib_path: str, args: list, arg_type_symbol_dict: 
     if not all_scalar:
         broadcast_arg = dispatch_args[0]
         # Get the broadcast shape over all the arguments
-        for i, item in enumerate(dispatch_args):
+        for item in dispatch_args:
             _, broadcast_arg = semantic.binary_op_type_checking_impl(
                 item, broadcast_arg, _builder)
         # Change the shape of each argument based on the broadcast shape

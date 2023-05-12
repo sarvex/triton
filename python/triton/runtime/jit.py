@@ -47,9 +47,7 @@ class DependenciesFinder(ast.NodeVisitor):
         lhs = self.visit(node.value)
         while isinstance(lhs, ast.Attribute):
             lhs = self.visit(lhs.value)
-        if lhs is None or lhs is triton:
-            return None
-        return getattr(lhs, node.attr)
+        return None if lhs is None or lhs is triton else getattr(lhs, node.attr)
 
     def visit_Call(self, node):
         func = self.visit(node.func)
@@ -123,11 +121,11 @@ class JITFunction(KernelInterface[T]):
         elif isinstance(arg, bool):
             return "i1"
         elif isinstance(arg, int):
-            if -2**31 <= arg and arg <= 2**31 - 1:
+            if -(2**31) <= arg <= 2**31 - 1:
                 return "i32"
-            elif 2**31 <= arg and arg <= 2**32 - 1:
+            elif 2**31 <= arg <= 2**32 - 1:
                 return "u32"
-            elif 2**63 <= arg and arg <= 2**64 - 1:
+            elif 2**63 <= arg <= 2**64 - 1:
                 return "u64"
             else:
                 return "i64"
@@ -152,9 +150,8 @@ class JITFunction(KernelInterface[T]):
                 return x.data_ptr() % JITFunction.divisibility == 0
             elif isinstance(x, int):
                 return x % JITFunction.divisibility == 0
-            if x is None:
-                return True
-            return False
+            return x is None
+
         divisible_by_16 = {i for i, arg in enumerate(args) if is_divisible_by_16(arg) and i not in self.do_not_specialize}
         equal_to_1 = {i for i, arg in enumerate(args) if isinstance(arg, int) and arg == 1 and i not in self.do_not_specialize}
         return namedtuple("instance_descriptor", ["divisible_by_16", "equal_to_1"])(tuple(divisible_by_16), tuple(equal_to_1))
@@ -191,12 +188,10 @@ class JITFunction(KernelInterface[T]):
         return key
 
     def _make_signature(self, sig_key):
-        signature = ",".join([self._type_of(k) for i, k in enumerate(sig_key)])
-        return signature
+        return ",".join([self._type_of(k) for k in sig_key])
 
     def _make_constants(self, constexpr_key):
-        constants = dict(zip(self.constexprs, constexpr_key))
-        return constants
+        return dict(zip(self.constexprs, constexpr_key))
 
     def _call_hook(self, key, signature, device, constants, num_warps, num_stages, extern_libs, configs):
         if JITFunction.cache_hook is None:
@@ -207,11 +202,13 @@ class JITFunction(KernelInterface[T]):
         repr = f"{name}[num_warps={num_warps}, num_stages={num_stages}]({arg_reprs})"
         key = str(key)
 
+
+
         class LegacyCompiler:
             def __init__(self, module, name):
                 self.module = module
                 self.name = name
-                pass
+
 
         kwargs = dict(signature=signature, device=device, constants=constants,
                       num_warps=num_warps, num_stages=num_stages, extern_libs=extern_libs,
@@ -227,22 +224,19 @@ class JITFunction(KernelInterface[T]):
         sig_keys = ', '.join([f'_key_of({arg})' for arg in regular_args])
         # cache key for constexpr argument values
         constexpr_keys = ', '.join(constexpr_args)
-        # cache key for argument specialization
-        specializations = []
-        for i, arg in enumerate(regular_args):
-            if i in self.do_not_specialize:
-                continue
-            specializations += [f'({arg}.data_ptr() % {JITFunction.divisibility} == 0) if hasattr({arg}, "data_ptr") '
-                                f'else ({arg} % {JITFunction.divisibility} == 0, {arg} == 1) if isinstance({arg}, int) '
-                                f'else (False,)']
+        specializations = [
+            f'({arg}.data_ptr() % {JITFunction.divisibility} == 0) if hasattr({arg}, "data_ptr") else ({arg} % {JITFunction.divisibility} == 0, {arg} == 1) if isinstance({arg}, int) else (False,)'
+            for i, arg in enumerate(regular_args)
+            if i not in self.do_not_specialize
+        ]
         spec_keys = ', '.join(specializations)
         grid_args = ','.join([f'"{arg}": {arg}' for arg in self.arg_names])
 
         src = f"""
 def {self.fn.__name__}({', '.join(self.arg_names)}, grid, num_warps=4, num_stages=3, extern_libs=None, stream=None, warmup=False):
     sig_key =  {sig_keys},
-    constexpr_key = {f'{constexpr_keys},' if len(constexpr_keys) > 0 else ()}
-    spec_key = {f'{spec_keys},' if len(spec_keys) > 0 else ()}
+    constexpr_key = {f'{constexpr_keys},' if constexpr_keys != "" else ()}
+    spec_key = {f'{spec_keys},' if spec_keys != "" else ()}
     key = (version_key, sig_key, constexpr_key, spec_key)
     if not extern_libs is None:
       key = (key, tuple(extern_libs.items()))
@@ -415,11 +409,7 @@ def jit(
             do_not_specialize=do_not_specialize,
         )
 
-    if fn is not None:
-        return decorator(fn)
-
-    else:
-        return decorator
+    return decorator(fn) if fn is not None else decorator
 
 
 class TensorWrapper:

@@ -142,11 +142,8 @@ class Config:
         self.pre_hook = pre_hook
 
     def __str__(self):
-        res = []
-        for k, v in self.kwargs.items():
-            res.append(f'{k}: {v}')
-        res.append(f'num_warps: {self.num_warps}')
-        res.append(f'num_stages: {self.num_stages}')
+        res = [f'{k}: {v}' for k, v in self.kwargs.items()]
+        res.extend((f'num_warps: {self.num_warps}', f'num_stages: {self.num_stages}'))
         return ', '.join(res)
 
 
@@ -195,7 +192,7 @@ class Heuristics(KernelInterface):
 
     def run(self, *args, **kwargs):
         for v, heur in self.values.items():
-            kwargs[v] = heur({**dict(zip(self.arg_names, args)), **kwargs})
+            kwargs[v] = heur(**dict(zip(self.arg_names, args)) | kwargs)
         return self.fn.run(*args, **kwargs)
 
 

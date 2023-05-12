@@ -202,7 +202,7 @@ class _attention(torch.autograd.Function):
         BLOCK = 128
         # shape constraints
         Lq, Lk, Lv = q.shape[-1], k.shape[-1], v.shape[-1]
-        assert Lq == Lk and Lk == Lv
+        assert Lq == Lk == Lv
         assert Lk in {16, 32, 64, 128}
         o = torch.empty_like(q)
         grid = (triton.cdiv(q.shape[2], BLOCK), q.shape[0] * q.shape[1], 1)
@@ -277,8 +277,8 @@ def test_op(Z, H, N_CTX, D_HEAD, dtype=torch.float16):
     # reference implementation
     M = torch.tril(torch.ones((N_CTX, N_CTX), device="cuda"))
     p = torch.matmul(q, k.transpose(2, 3)) * sm_scale
-    for z in range(Z):
-        for h in range(H):
+    for _ in range(Z):
+        for _ in range(H):
             p[:, :, M == 0] = float("-inf")
     p = torch.softmax(p.float(), dim=-1).half()
     # p = torch.exp(p)
@@ -338,8 +338,7 @@ def bench_flash_attention(BATCH, H, N_CTX, D_HEAD, mode, provider, dtype=torch.f
             o = fn()
             do = torch.randn_like(o)
             fn = lambda: o.backward(do, retain_graph=True)
-        ms = triton.testing.do_bench(fn, percentiles=None, warmup=warmup, rep=rep)
-        return ms
+        return triton.testing.do_bench(fn, percentiles=None, warmup=warmup, rep=rep)
     if provider == "flash":
         lengths = torch.full((BATCH,), fill_value=N_CTX, device=device)
         cu_seqlens = torch.zeros((BATCH + 1,), device=device, dtype=torch.int32)
@@ -350,8 +349,7 @@ def bench_flash_attention(BATCH, H, N_CTX, D_HEAD, mode, provider, dtype=torch.f
             o = fn()
             do = torch.randn_like(o)
             fn = lambda: o.backward(do, retain_graph=True)
-        ms = triton.testing.do_bench(fn, percentiles=None, warmup=warmup, rep=rep)
-        return ms
+        return triton.testing.do_bench(fn, percentiles=None, warmup=warmup, rep=rep)
 
 
 # only works on post-Ampere GPUs right now

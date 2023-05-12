@@ -24,7 +24,7 @@ torch_dtypes = ['bool'] + int_dtypes + ['uint8'] + float_dtypes + ['bfloat16']
 
 def _bitwidth(dtype: str) -> int:
     # ex.: "int64" -> 64
-    return int(re.search(r'(\d+)$', dtype).group(1))
+    return int(re.search(r'(\d+)$', dtype)[1])
 
 
 def numpy_random(shape, dtype_str, rs: Optional[RandomState] = None, low=None, high=None):
@@ -62,14 +62,15 @@ def to_triton(x: np.ndarray, device='cuda', dst_type=None) -> Union[TensorWrappe
           If dst_type is None, we infer dst_type from x.
     '''
     t = x.dtype.name
-    if t in uint_dtypes:
-        signed_type_name = t.lstrip('u')  # e.g. "uint16" -> "int16"
-        x_signed = x.astype(getattr(np, signed_type_name))
-        return reinterpret(torch.tensor(x_signed, device=device), getattr(tl, t))
-    else:
-        if t == 'float32' and dst_type == 'bfloat16':
-            return torch.tensor(x, device=device).bfloat16()
-        return torch.tensor(x, device=device)
+    if t not in uint_dtypes:
+        return (
+            torch.tensor(x, device=device).bfloat16()
+            if t == 'float32' and dst_type == 'bfloat16'
+            else torch.tensor(x, device=device)
+        )
+    signed_type_name = t.lstrip('u')  # e.g. "uint16" -> "int16"
+    x_signed = x.astype(getattr(np, signed_type_name))
+    return reinterpret(torch.tensor(x_signed, device=device), getattr(tl, t))
 
 
 def torch_dtype_name(dtype) -> str:
@@ -78,7 +79,7 @@ def torch_dtype_name(dtype) -> str:
     elif isinstance(dtype, torch.dtype):
         # 'torch.int64' -> 'int64'
         m = re.match(r'^torch\.(\w+)$', str(dtype))
-        return m.group(1)
+        return m[1]
     else:
         raise TypeError(f'not a triton or torch dtype: {type(dtype)}')
 
@@ -330,10 +331,7 @@ def test_bitwise_op(dtype_x, dtype_y, op, device='cuda'):
 def test_shift_op(dtype_x, dtype_y, op, device='cuda'):
     expr = f'x {op} y'
     bw = max(_bitwidth(dtype_x), _bitwidth(dtype_y))
-    if dtype_x.startswith('int'):
-        dtype_z = f'int{bw}'
-    else:
-        dtype_z = f'uint{bw}'
+    dtype_z = f'int{bw}' if dtype_x.startswith('int') else f'uint{bw}'
     numpy_expr = f'x.astype(np.{dtype_z}) {op} y.astype(np.{dtype_z})'
     _test_binary(dtype_x, dtype_y, expr, numpy_expr, device=device, y_low=0, y_high=65)
 
@@ -610,9 +608,8 @@ def test_tuples():
     for mode in ['all_neg', 'all_pos', 'min_neg', 'max_pos']]))
 def test_atomic_rmw(op, dtype_x_str, mode, device='cuda'):
     capability = torch.cuda.get_device_capability()
-    if capability[0] < 7:
-        if dtype_x_str == 'float16':
-            pytest.skip("Only test atomic float16 ops on devices with sm >= 70")
+    if capability[0] < 7 and dtype_x_str == 'float16':
+        pytest.skip("Only test atomic float16 ops on devices with sm >= 70")
     n_programs = 5
 
     # triton kernel
@@ -892,9 +889,7 @@ def get_reduced_dtype(dtype_str, op):
         return 'int32'
     if dtype_str in ['int8', 'uint8', 'int16', 'uint16']:
         return 'int32'
-    if dtype_str == 'bfloat16':
-        return 'float32'
-    return dtype_str
+    return 'float32' if dtype_str == 'bfloat16' else dtype_str
 
 
 @pytest.mark.parametrize("op, dtype_str, shape",
@@ -1111,9 +1106,8 @@ def test_dot(M, N, K, num_warps, col_a, col_b, epilogue, allow_tf32, dtype, devi
             pytest.skip("Only test int8 on devices with sm >= 80")
         elif dtype == 'float32' and allow_tf32:
             pytest.skip("Only test tf32 on devices with sm >= 80")
-    if capability[0] == 7:
-        if (M, N, K, num_warps) == (128, 256, 32, 8):
-            pytest.skip("shared memory out of resource")
+    if capability[0] == 7 and (M, N, K, num_warps) == (128, 256, 32, 8):
+        pytest.skip("shared memory out of resource")
 
     torch.backends.cuda.matmul.allow_tf32 = allow_tf32
 
@@ -1157,6 +1151,7 @@ def test_dot(M, N, K, num_warps, col_a, col_b, epilogue, allow_tf32, dtype, devi
             w = tl.load(Ws)
             z = tl.dot(z.to(w.dtype), w)
         tl.store(Zs, z)
+
     # input
     rs = RandomState(17)
     if col_a:
@@ -1467,12 +1462,13 @@ def test_pointer_arguments(device):
     @triton.jit
     def kernel(x):
         pass
+
     x = torch.empty(1024, device=device)
     result = True
     try:
         kernel[(1,)](x)
     except ValueError:
-        result = True if device == 'cpu' else False
+        result = device == 'cpu'
     assert result
 
 
@@ -1736,10 +1732,7 @@ def test_if_else():
 
     @triton.jit
     def kernel(Cond, TrueVal, FalseVal, Out):
-        if tl.load(Cond):
-            val = tl.load(TrueVal)
-        else:
-            val = tl.load(FalseVal)
+        val = tl.load(TrueVal) if tl.load(Cond) else tl.load(FalseVal)
         tl.store(Out, val)
 
     out = to_triton(np.zeros((1,), dtype=np.int32), device='cuda')
@@ -1791,10 +1784,7 @@ def test_nested_if_else_return(_cond1, _cond2, _cond3):
             else:
                 return
         else:
-            if tl.load(Cond3):
-                val = tl.load(Val2)
-            else:
-                val = tl.load(Val3)
+            val = tl.load(Val2) if tl.load(Cond3) else tl.load(Val3)
         tl.store(Out, val)
 
     out = to_triton(np.full((1,), -1, dtype=np.int32), device='cuda')

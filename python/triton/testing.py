@@ -111,7 +111,13 @@ def allclose(x, y, tol=1e-2):
 
 def nvsmi(attrs):
     attrs = ','.join(attrs)
-    cmd = ['nvidia-smi', '-i', '0', '--query-gpu=' + attrs, '--format=csv,noheader,nounits']
+    cmd = [
+        'nvidia-smi',
+        '-i',
+        '0',
+        f'--query-gpu={attrs}',
+        '--format=csv,noheader,nounits',
+    ]
     out = subprocess.check_output(cmd)
     ret = out.decode(sys.stdout.encoding).split(',')
     ret = [int(x) for x in ret]
@@ -156,8 +162,8 @@ def do_bench(fn, warmup=25, rep=100, grad_to_none=None,
     # We maintain a buffer of 256 MB that we clear
     # before each kernel call to make sure that the L2
     # doesn't contain any input data before the run
-    start_event = [torch.cuda.Event(enable_timing=True) for i in range(n_repeat)]
-    end_event = [torch.cuda.Event(enable_timing=True) for i in range(n_repeat)]
+    start_event = [torch.cuda.Event(enable_timing=True) for _ in range(n_repeat)]
+    end_event = [torch.cuda.Event(enable_timing=True) for _ in range(n_repeat)]
     if fast_flush:
         cache = torch.empty(int(256e6 // 4), dtype=torch.int, device='cuda')
     else:
@@ -182,11 +188,10 @@ def do_bench(fn, warmup=25, rep=100, grad_to_none=None,
     # Record clocks
     torch.cuda.synchronize()
     times = torch.tensor([s.elapsed_time(e) for s, e in zip(start_event, end_event)])
-    if percentiles:
-        percentiles = torch.quantile(times, torch.tensor(percentiles)).tolist()
-        return tuple(percentiles)
-    else:
+    if not percentiles:
         return torch.mean(times).item()
+    percentiles = torch.quantile(times, torch.tensor(percentiles)).tolist()
+    return tuple(percentiles)
 
 
 class Benchmark:
@@ -283,7 +288,7 @@ class Mark:
             ax = plt.subplot()
             x = bench.x_names[0]
             for i, y in enumerate(bench.line_names):
-                y_min, y_max = df[y + '-min'], df[y + '-max']
+                y_min, y_max = df[f'{y}-min'], df[f'{y}-max']
                 col = bench.styles[i][0] if bench.styles else None
                 sty = bench.styles[i][1] if bench.styles else None
                 ax.plot(df[x], df[y], label=y, color=col, ls=sty)
@@ -302,7 +307,7 @@ class Mark:
                 plt.savefig(os.path.join(save_path, f"{bench.plot_name}.png"))
         df = df[[bench.x_names[0]] + bench.line_names]
         if print_data:
-            print(bench.plot_name + ':')
+            print(f'{bench.plot_name}:')
             print(df)
         if save_path:
             df.to_csv(os.path.join(save_path, f"{bench.plot_name}.csv"), float_format='%.1f', index=False)
@@ -328,8 +333,7 @@ def perf_report(benchmarks):
     :param benchmarks: Benchmarking configurations.
     :type benchmarks: List of :class:`Benchmark`
     """
-    wrapper = lambda fn: Mark(fn, benchmarks)
-    return wrapper
+    return lambda fn: Mark(fn, benchmarks)
 
 
 def get_dram_gbps(backend=None, device=None):
@@ -341,8 +345,7 @@ def get_dram_gbps(backend=None, device=None):
         device = torch.cuda.current_device()
     mem_clock_khz = triton.compiler.cuda_utils.get_device_properties(device)["mem_clock_rate"]  # in kHz
     bus_width = triton.compiler.cuda_utils.get_device_properties(device)["mem_bus_width"]
-    bw_gbps = mem_clock_khz * bus_width * 2 / 1e6 / 8  # In GB/s
-    return bw_gbps
+    return mem_clock_khz * bus_width * 2 / 1e6 / 8
 
 
 def get_max_tensorcore_tflops(dtype: torch.dtype, backend=None, device=None, clock_rate=None):
@@ -359,17 +362,15 @@ def get_max_tensorcore_tflops(dtype: torch.dtype, backend=None, device=None, clo
     if capability[0] < 8:
         assert dtype == torch.float16
         ops_per_sub_core = 256  # 2 4x4x4 Tensor Cores
+    elif dtype == torch.float32:
+        ops_per_sub_core = 256
+    elif dtype in [torch.float16, torch.bfloat16]:
+        ops_per_sub_core = 512
+    elif dtype == torch.int8:
+        ops_per_sub_core = 1024
     else:
-        if dtype == torch.float32:
-            ops_per_sub_core = 256
-        elif dtype in [torch.float16, torch.bfloat16]:
-            ops_per_sub_core = 512
-        elif dtype == torch.int8:
-            ops_per_sub_core = 1024
-        else:
-            raise RuntimeError("dtype not supported")
-    tflops = num_subcores * clock_rate * ops_per_sub_core * 1e-9
-    return tflops
+        raise RuntimeError("dtype not supported")
+    return num_subcores * clock_rate * ops_per_sub_core * 1e-9
 
 # create decorator that wraps test function into
 # a cuda-memcheck system call
@@ -404,7 +405,7 @@ def nvsmi_attr(attrs):
         "nvidia-smi",
         "-i",
         "0",
-        "--query-gpu=" + attrs,
+        f"--query-gpu={attrs}",
         "--format=csv,noheader,nounits",
     ]
     out = subprocess.check_output(cmd)
@@ -461,12 +462,10 @@ def get_max_simd_tflops(dtype: torch.dtype, backend=None, device=None):
             ops_per_sub_core = 64
         else:
             raise RuntimeError("dtype not supported")
+    elif dtype == torch.float32:
+        ops_per_sub_core = 32
+    elif dtype in [torch.float16, torch.bfloat16]:
+        ops_per_sub_core = 64
     else:
-        if dtype == torch.float32:
-            ops_per_sub_core = 32
-        elif dtype in [torch.float16, torch.bfloat16]:
-            ops_per_sub_core = 64
-        else:
-            raise RuntimeError("dtype not supported")
-    tflops = num_subcores * clock_rate * ops_per_sub_core * 1e-9
-    return tflops
+        raise RuntimeError("dtype not supported")
+    return num_subcores * clock_rate * ops_per_sub_core * 1e-9

@@ -185,7 +185,7 @@ class Libdevice(ExternLibrary):
             arg_type = convert_type(arg_str.split()[0])
             if arg_type is None:
                 return None
-            arg_name = 'arg' + str(i)
+            arg_name = f'arg{str(i)}'
             arg_types.append(arg_type)
             arg_names.append(arg_name)
         if op_name == "sad":
@@ -282,13 +282,7 @@ class Libdevice(ExternLibrary):
         self._group_symbols()
 
     def _output_stubs(self) -> str:
-        # Generate python functions in the following format:
-        # @extern.extern
-        # def <op_name>(<args>, _builder=None):
-        #   arg_type_symbol_dict = {[arg_type]: {(symbol, ret_type)}}
-        #   return extern.dispatch("libdevice", <path>, <args>, <arg_type_symbol_dict>, _builder)
-        import_str = "from . import core, extern\n"
-        import_str += "import os\n"
+        import_str = "from . import core, extern\n" + "import os\n"
         header_str = "LIBDEVICE_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), \"..\", \"third_party\", \"cuda\", \"lib\", \"libdevice.10.bc\")"
         func_str = ""
         for symbols in self._symbol_groups.values():
@@ -316,9 +310,7 @@ class Libdevice(ExternLibrary):
             return_str += ", _builder)\n"
 
             func_str += func_name_str + return_str + "\n"
-        file_str = import_str + header_str + func_str
-
-        return file_str
+        return import_str + header_str + func_str
 
 
 class LLVMDisassembler:

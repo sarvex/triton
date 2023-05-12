@@ -17,8 +17,7 @@ tmpdir = ".tmp"
 @triton.jit
 def function_1(i):
     i = i + 1
-    i = function_2(i)
-    return i
+    return function_2(i)
 
 
 @triton.jit
@@ -123,6 +122,7 @@ def test_value_specialization(value: int, value_type: str, device='cuda') -> Non
     def get_cache_str(*args, **kwargs):
         nonlocal cache_str
         cache_str = kwargs["repr"]
+
     triton.JITFunction.cache_hook = get_cache_str
     reset_tmp_dir()
     x = torch.tensor([3.14159], device='cuda')
@@ -130,7 +130,7 @@ def test_value_specialization(value: int, value_type: str, device='cuda') -> Non
     triton.JITFunction.cache_hook = None
 
     cache_str_match = re.match(r".*VALUE: (\w+).*", cache_str)
-    spec_type = None if cache_str_match is None else cache_str_match.group(1)
+    spec_type = None if cache_str_match is None else cache_str_match[1]
     assert spec_type == value_type
 
 
@@ -145,13 +145,13 @@ def test_constexpr_not_callable() -> None:
         kernel[(1, )](x, c="str")
     except BaseException:
         error = True
-    assert error is False
+    assert not error
     # try and catch
     try:
         kernel[(1, )](x, c=tl.abs)
     except BaseException:
         error = True
-    assert error is True
+    assert error
 
 
 def test_jit_warmup_cache() -> None:

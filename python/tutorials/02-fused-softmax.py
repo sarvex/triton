@@ -37,10 +37,7 @@ def naive_softmax(x):
     numerator = torch.exp(z)
     # read  MN elements ; write M  elements
     denominator = numerator.sum(dim=1)
-    # read MN + M elements ; write MN elements
-    ret = numerator / denominator[:, None]
-    # in total: read 5MN + 2M elements ; wrote 3MN + 2M elements
-    return ret
+    return numerator / denominator[:, None]
 
 
 # %%
